@@ -112,6 +112,7 @@ router.post('/book-ride', async (req, res) => {
       fare,
       distance,
       status: scheduledTime ? 'scheduled' : 'requested',
+      vehicleType,
       ...(scheduledTime && { scheduledTime: new Date(scheduledTime) }),
       ...(notes && { notes }),
     });

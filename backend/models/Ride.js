@@ -38,6 +38,17 @@ const rideSchema = new mongoose.Schema({
   duration: {
     type: Number, // in minutes
   },
+  vehicleType: {
+    type: String,
+    enum: ['standard', 'premium', 'xl'],
+    default: 'standard',
+  },
+  scheduledTime: {
+    type: Date,
+  },
+  notes: {
+    type: String,
+  },
   requestedAt: {
     type: Date,
     default: Date.now,
