@@ -10,6 +10,10 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
+  password: {
+    type: String,
+    required: true,
+  },
   phone: {
     type: String,
     required: true,
@@ -21,11 +25,6 @@ const userSchema = new mongoose.Schema({
   },
   profilePicture: {
     type: String,
-  },
-  clerkId: {
-    type: String,
-    required: true,
-    unique: true,
   },
 }, {
   timestamps: true,

@@ -22,6 +22,10 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Routes
+const userRoutes = require('./routes/userRoutes');
+app.use('/api/users', userRoutes);
+
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)
 .then(() => console.log('MongoDB connected'))
