@@ -2,6 +2,8 @@ const express = require('express');
 const User = require('../models/User');
 const Ride = require('../models/Ride');
 const Payment = require('../models/Payment');
+const { auth } = require('../middleware/auth');
+const PDFDocument = require('pdfkit');
 
 const router = express.Router();
 
@@ -30,6 +32,69 @@ router.get('/rides', async (req, res) => {
   try {
     const rides = await Ride.find().populate('rider driver');
     res.json(rides);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Ride history for authenticated user
+router.get('/rides/history', auth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const role = req.user.role;
+    let rides;
+    if (role === 'rider') {
+      rides = await Ride.find({ rider: userId }).populate('driver');
+    } else {
+      rides = await Ride.find({ driver: userId }).populate('rider');
+    }
+    res.json(rides);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PDF receipt for a completed ride
+router.get('/rides/:rideId/receipt', auth, async (req, res) => {
+  try {
+    const rideId = req.params.rideId;
+    const ride = await Ride.findById(rideId).populate('rider driver');
+    if (!ride) return res.status(404).json({ error: 'Ride not found' });
+    // Only allow rider or driver to access their receipt
+    if (
+      String(ride.rider._id) !== String(req.user._id) &&
+      String(ride.driver?._id) !== String(req.user._id)
+    ) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    // Find payment
+    const payment = await Payment.findOne({ ride: rideId, status: 'completed' });
+    // PDF generation
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=ride_receipt_${rideId}.pdf`);
+    doc.fontSize(20).text('Cab Booking App - Ride Receipt', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(14).text(`Ride ID: ${ride._id}`);
+    doc.text(`Date: ${ride.createdAt.toLocaleString()}`);
+    doc.text(`Rider: ${ride.rider.name} (${ride.rider.email})`);
+    doc.text(`Driver: ${ride.driver ? ride.driver.name : 'N/A'}`);
+    doc.text(`Pickup: ${ride.pickupLocation.address}`);
+    doc.text(`Dropoff: ${ride.dropoffLocation.address}`);
+    doc.text(`Vehicle Type: ${ride.vehicleType}`);
+    doc.text(`Distance: ${ride.distance || 'N/A'} km`);
+    doc.text(`Fare: $${ride.fare}`);
+    if (payment) {
+      doc.text(`Payment Status: ${payment.status}`);
+      doc.text(`Paid At: ${payment.paidAt ? payment.paidAt.toLocaleString() : 'N/A'}`);
+      doc.text(`Payment Method: ${payment.paymentMethod || 'N/A'}`);
+    } else {
+      doc.text('Payment: Not completed');
+    }
+    doc.moveDown();
+    doc.text('Thank you for riding with us!', { align: 'center' });
+    doc.end();
+    doc.pipe(res);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
