@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Ride = require('../models/Ride');
 const Payment = require('../models/Payment');
+const Review = require('../models/Review');
 const { auth } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 
@@ -95,6 +96,46 @@ router.get('/rides/:rideId/receipt', auth, async (req, res) => {
     doc.text('Thank you for riding with us!', { align: 'center' });
     doc.end();
     doc.pipe(res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Submit a rating & review for a completed ride
+router.post('/rides/:rideId/review', auth, async (req, res) => {
+  try {
+    const { rating, comment } = req.body;
+    const rideId = req.params.rideId;
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ error: 'Ride not found' });
+    if (ride.status !== 'completed') return res.status(400).json({ error: 'Ride not completed yet' });
+    // Only rider can review driver
+    if (String(ride.rider) !== String(req.user._id)) return res.status(403).json({ error: 'Only rider can review' });
+    // Prevent duplicate reviews
+    const existing = await Review.findOne({ ride: rideId, rider: req.user._id });
+    if (existing) return res.status(400).json({ error: 'Review already submitted' });
+    const review = new Review({
+      ride: rideId,
+      rider: req.user._id,
+      driver: ride.driver,
+      rating,
+      comment,
+    });
+    await review.save();
+    res.status(201).json({ message: 'Review submitted', review });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get reviews for a driver
+router.get('/drivers/:driverId/reviews', async (req, res) => {
+  try {
+    const driverId = req.params.driverId;
+    const reviews = await Review.find({ driver: driverId }).populate('rider', 'name email');
+    // Calculate average rating
+    const avgRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2) : null;
+    res.json({ reviews, avgRating });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
